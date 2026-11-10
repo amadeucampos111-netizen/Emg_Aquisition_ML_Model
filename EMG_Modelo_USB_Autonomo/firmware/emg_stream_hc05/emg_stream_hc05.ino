@@ -1,0 +1,48 @@
+/*
+  AQUISICAO sEMG — Arduino Uno R3 + 2 canais Grove EMG
+  Sensor 1 SIG -> A0; Sensor 2 SIG -> A1; VCC/GND conforme o fabricante.
+  Envia por USB: sequencia,adc1,adc2\n
+  Taxa de amostragem: 200 amostras/s por par de canais.
+  Monitor Serie / Python: 115200 baud.
+
+  Este firmware serve APENAS para recolher dados rotulados no PC.
+  Depois do treino, carregar emg_recognition_uno.ino para classificar
+  autonomamente, sem PC.
+*/
+const byte EMG1_PIN = A0;
+const byte EMG2_PIN = A1;
+const uint16_t SAMPLE_HZ = 200;
+const uint32_t PERIOD_US = 1000000UL / SAMPLE_HZ;
+
+uint32_t nextSampleUs = 0;
+uint16_t sampleNumber = 0;
+
+void setup() {
+  pinMode(EMG1_PIN, INPUT);
+  pinMode(EMG2_PIN, INPUT);
+  Serial.begin(115200);
+  delay(300);
+  Serial.println(F("#EMG_USB_READY,200"));
+  nextSampleUs = micros();
+}
+
+void loop() {
+  uint32_t now = micros();
+  if ((int32_t)(now - nextSampleUs) >= 0) {
+    nextSampleUs += PERIOD_US;
+
+    uint16_t ch1 = analogRead(EMG1_PIN);
+    uint16_t ch2 = analogRead(EMG2_PIN);
+
+    Serial.print(sampleNumber++);
+    Serial.write(',');
+    Serial.print(ch1);
+    Serial.write(',');
+    Serial.println(ch2);
+
+    // Recupera a temporizacao se uma operacao atrasar o ciclo.
+    if ((int32_t)(micros() - nextSampleUs) > (int32_t)(4UL * PERIOD_US)) {
+      nextSampleUs = micros() + PERIOD_US;
+    }
+  }
+}
