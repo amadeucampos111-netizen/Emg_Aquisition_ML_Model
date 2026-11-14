@@ -1,17 +1,17 @@
-"""Recolhe dados rotulados do Arduino através do HC-05 (ou USB)."""
+"""Recolhe dados rotulados do Arduino através do USB (ou HC-05)."""
 import argparse
 import csv
 import os
 import time
 from datetime import datetime
 import serial
-from emg_common import parse_sample
+from emg_common import auto_connect_arduino, parse_sample, reconnect_serial
 from gesture_config import DEFAULT_LABELS, GESTURES
 
 
 def main():
     p = argparse.ArgumentParser(description="Recolha de dados EMG de 2 canais")
-    p.add_argument("--port", required=True, help="Porta COM do HC-05, por exemplo COM7")
+    p.add_argument("--port", default=None, help="Porta COM opcional (ex.: COM7). Se omitida, deteta automaticamente.")
     p.add_argument("--baud", type=int, default=115200)
     p.add_argument("--seconds", type=float, default=5.0, help="Segundos por repetição")
     p.add_argument("--repetitions", type=int, default=8)
@@ -32,23 +32,34 @@ def main():
         print(f"  - {label}: {GESTURES.get(label, 'Gesto adicional definido pelo utilizador.')}")
     print("Mantém o gesto estável e evita contrair desnecessariamente o ombro.")
 
+    ser = None
     try:
-        with serial.Serial(args.port, args.baud, timeout=0.25) as ser, \
-                open(args.output, "a", newline="", encoding="utf-8") as f:
+        print("\n[*] A detetar e validar ligação ao Arduino Uno...")
+        ser, active_port = auto_connect_arduino(manual_port=args.port, baud=args.baud, timeout=0.25)
+        print(f"[✓] Ligado com sucesso em {active_port} ({args.baud} baud).")
+
+        with open(args.output, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if new_file:
                 writer.writerow(["sequence", "emg1", "emg2", "label", "repetition", "session"])
-            time.sleep(2)
-            ser.reset_input_buffer()
             for label in labels:
                 input(f"\nPrepara '{label}'. ENTER para iniciar as repetições...")
                 for rep in range(1, args.repetitions + 1):
                     input(f"  Repetição {rep}/{args.repetitions}: ENTER e mantém durante {args.seconds:g} s...")
-                    ser.reset_input_buffer()
+                    try:
+                        ser.reset_input_buffer()
+                    except (serial.SerialException, OSError):
+                        ser = reconnect_serial(active_port, baud=args.baud, timeout=0.25)
+
                     start = time.monotonic()
                     rows = 0
                     while time.monotonic() - start < args.seconds:
-                        sample = parse_sample(ser.readline())
+                        try:
+                            raw = ser.readline()
+                        except (serial.SerialException, OSError):
+                            ser = reconnect_serial(active_port, baud=args.baud, timeout=0.25)
+                            continue
+                        sample = parse_sample(raw)
                         if sample is None:
                             continue
                         seq, a, b = sample
@@ -59,6 +70,10 @@ def main():
                     time.sleep(1.0)
     except serial.SerialException as exc:
         raise SystemExit(f"Erro na porta série: {exc}")
+    finally:
+        if ser is not None and ser.is_open:
+            ser.close()
+
     print(f"\nDataset guardado em: {args.output}")
     print("Repete a recolha noutra sessão e com os elétrodos reposicionados para testar robustez.")
 

@@ -25,6 +25,23 @@ SoftwareSerial bt(BT_RX_PIN, BT_TX_PIN);
 uint16_t samples[WINDOW_N][2];
 uint16_t filled = 0;
 uint32_t nextSampleUs;
+char cmdBuf[16];
+byte cmdIdx = 0;
+
+void checkSerialHandshake() {
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      cmdBuf[cmdIdx] = '\0';
+      if (cmdIdx > 0 && strcmp(cmdBuf, "PING") == 0) {
+        Serial.println(F("PONG_EMG_RECOGNIZER_READY"));
+      }
+      cmdIdx = 0;
+    } else if (cmdIdx < sizeof(cmdBuf) - 1) {
+      cmdBuf[cmdIdx++] = c;
+    }
+  }
+}
 
 void calculateChannelFeatures(byte channel, float *out) {
   float mean = 0.0f;
@@ -103,6 +120,7 @@ void setup() {
   bt.begin(38400);
   delay(300);
   bt.println(F("#EMG_RECOGNIZER_READY"));
+  Serial.println(F("#EMG_RECOGNIZER_READY"));
 #if MODEL_VALID
   Serial.println(F("Modelo carregado. Reconhecimento local ativo."));
 #else
@@ -112,6 +130,8 @@ void setup() {
 }
 
 void loop() {
+  checkSerialHandshake();
+
   const uint32_t now = micros();
   if ((int32_t)(now - nextSampleUs) >= 0) {
     nextSampleUs += PERIOD_US;

@@ -2,6 +2,7 @@
   AQUISICAO sEMG — Arduino Uno R3 + 2 canais Grove EMG
   Sensor 1 SIG -> A0; Sensor 2 SIG -> A1; VCC/GND conforme o fabricante.
   Envia por USB: sequencia,adc1,adc2\n
+  Responde a comandos "PING" com "PONG_EMG_READY" para handshake seguro com Python.
   Taxa de amostragem: 200 amostras/s por par de canais.
   Monitor Serie / Python: 115200 baud.
 
@@ -16,6 +17,23 @@ const uint32_t PERIOD_US = 1000000UL / SAMPLE_HZ;
 
 uint32_t nextSampleUs = 0;
 uint16_t sampleNumber = 0;
+char cmdBuf[16];
+byte cmdIdx = 0;
+
+void checkSerialHandshake() {
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\n' || c == '\r') {
+      cmdBuf[cmdIdx] = '\0';
+      if (cmdIdx > 0 && strcmp(cmdBuf, "PING") == 0) {
+        Serial.println(F("PONG_EMG_READY"));
+      }
+      cmdIdx = 0;
+    } else if (cmdIdx < sizeof(cmdBuf) - 1) {
+      cmdBuf[cmdIdx++] = c;
+    }
+  }
+}
 
 void setup() {
   pinMode(EMG1_PIN, INPUT);
@@ -27,6 +45,8 @@ void setup() {
 }
 
 void loop() {
+  checkSerialHandshake();
+
   uint32_t now = micros();
   if ((int32_t)(now - nextSampleUs) >= 0) {
     nextSampleUs += PERIOD_US;

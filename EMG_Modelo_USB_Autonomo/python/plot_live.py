@@ -4,26 +4,35 @@ from collections import deque
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import serial
-from emg_common import parse_sample, SAMPLE_RATE
+from emg_common import auto_connect_arduino, parse_sample, reconnect_serial, SAMPLE_RATE
 
 p = argparse.ArgumentParser()
-p.add_argument("--port", required=True)
+p.add_argument("--port", default=None, help="Porta COM opcional. Se omitida, deteta automaticamente.")
 p.add_argument("--baud", type=int, default=115200)
 p.add_argument("--seconds", type=int, default=5)
 a = p.parse_args()
-ser = serial.Serial(a.port, a.baud, timeout=0.01)
+
+ser, active_port = auto_connect_arduino(manual_port=a.port, baud=a.baud, timeout=0.05)
+print(f"[✓] A visualizar sinal em {active_port} ({a.baud} baud)")
+
 n = max(100, a.seconds * SAMPLE_RATE)
 y1, y2 = deque([0] * n, maxlen=n), deque([0] * n, maxlen=n)
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 l1, = ax1.plot([], [], lw=0.8)
 l2, = ax2.plot([], [], lw=0.8)
-ax1.set_title("Grove EMG 1 — A0"); ax2.set_title("Grove EMG 2 — A1")
+ax1.set_title(f"Grove EMG 1 — A0 ({active_port})"); ax2.set_title("Grove EMG 2 — A1")
 ax2.set_xlabel("Amostras recentes"); ax1.set_ylabel("ADC"); ax2.set_ylabel("ADC")
 ax1.set_ylim(0, 1023); ax2.set_ylim(0, 1023)
 
 def update(_):
+    global ser
     for _ in range(80):
-        item = parse_sample(ser.readline())
+        try:
+            raw = ser.readline()
+        except (serial.SerialException, OSError):
+            ser = reconnect_serial(active_port, baud=a.baud, timeout=0.05)
+            break
+        item = parse_sample(raw)
         if item:
             _, v1, v2 = item
             y1.append(v1); y2.append(v2)
@@ -36,4 +45,5 @@ ani = FuncAnimation(fig, update, interval=50, blit=False, cache_frame_data=False
 try:
     plt.tight_layout(); plt.show()
 finally:
-    ser.close()
+    if ser is not None and ser.is_open:
+        ser.close()

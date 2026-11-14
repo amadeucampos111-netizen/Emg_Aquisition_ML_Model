@@ -7,7 +7,7 @@ O projeto está dividido em duas fases. O computador só é necessário para rec
 - **Treino por USB:** Arduino envia amostras EMG para o PC a 115200 baud; Python grava um CSV com etiquetas.
 - **Treino no PC:** Python treina um classificador LinearSVC, avalia-o e exporta `model.h`.
 - **Utilização autónoma:** `model.h` é compilado no Arduino. O Arduino reconhece os gestos sem PC. O USB pode ser desligado; a alimentação pode ser feita por uma fonte/bateria adequada.
-- **Bluetooth opcional:** no firmware final, o HC-05 transmite apenas o resultado da classificação. Não participa no cálculo nem é necessário para o reconhecimento.
+
 
 > O `model.h` incluído inicialmente é apenas um placeholder. É obrigatório recolher dados e executar o treino antes de carregar o firmware de reconhecimento.
 

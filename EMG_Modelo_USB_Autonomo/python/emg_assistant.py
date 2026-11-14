@@ -2,12 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Assistente EMG: deteção automática da ligação, recolha guiada e treino.
-Executar a partir da pasta raiz do projeto: python emg_assistant.py
+Executar a partir da pasta raiz do projeto: python python/emg_assistant.py
 """
 from __future__ import annotations
 import argparse
 import csv
-import os
 import sys
 import time
 import subprocess
@@ -16,11 +15,15 @@ from pathlib import Path
 
 try:
     import serial
-    from serial.tools import list_ports
 except ImportError:
     raise SystemExit("Falta pyserial. Executa: python -m pip install -r requirements.txt")
 
-from emg_common import parse_sample
+from emg_common import (
+    find_arduino_ports,
+    open_arduino_serial,
+    parse_sample,
+    reconnect_serial,
+)
 from gesture_config import DEFAULT_LABELS, GESTURES
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -36,62 +39,42 @@ def banner():
 
 
 def list_serial_ports():
-    ports = list(list_ports.comports())
-    if not ports:
+    candidates = find_arduino_ports()
+    if not candidates:
         print("Não foram encontradas portas série.")
     else:
         print("\nPortas série detetadas:")
-        for p in ports:
-            desc = p.description or "Dispositivo série"
-            print(f"  {p.device:12} | {desc}")
-    return ports
-
-
-def probe_port(device, baud, wait_seconds=3.0):
-    """Só aceita uma porta se receber pacotes EMG válidos."""
-    try:
-        with serial.Serial(device, baudrate=baud, timeout=0.15,
-                           write_timeout=0.2) as ser:
-            # A abertura da porta USB pode reiniciar o Uno.
-            time.sleep(min(wait_seconds, 2.2) if baud == 115200 else 0.25)
-            ser.reset_input_buffer()
-            deadline = time.monotonic() + wait_seconds
-            valid = 0
-            while time.monotonic() < deadline:
-                item = parse_sample(ser.readline())
-                if item is not None:
-                    valid += 1
-                    if valid >= 3:
-                        return True
-    except (serial.SerialException, OSError):
-        return False
-    return False
+        for device, label, is_priority in candidates:
+            tag = "[Arduino/USB]" if is_priority else "[Outra]"
+            print(f"  {device:12} | {tag:13} | {label}")
+    return candidates
 
 
 def detect_connection(manual_port=None, manual_baud=None):
-    ports = list_serial_ports()
+    candidates_ports = list_serial_ports()
     if manual_port:
-        candidates = [(manual_port, manual_baud)] if manual_baud else [
-            (manual_port, b) for b in BAUD_CANDIDATES
-        ]
+        bauds = (manual_baud,) if manual_baud else BAUD_CANDIDATES
+        candidates = [(manual_port, "Porta manual", b) for b in bauds]
     else:
         candidates = []
-        for p in ports:
-            # A aquisicao de treino e feita pela porta USB.
+        for device, label, _ in candidates_ports:
             for baud in BAUD_CANDIDATES:
-                candidates.append((p.device, baud))
+                candidates.append((device, label, baud))
 
-    print("\nA procurar um fluxo EMG válido...")
-    for device, baud in candidates:
-        print(f"  A testar {device} a {baud} baud...", end=" ", flush=True)
-        if probe_port(device, baud):
-            print("OK — Arduino/EMG detetado.")
+    print("\nA procurar e validar handshake com o Arduino Uno...")
+    for device, label, baud in candidates:
+        print(f"  A testar {device} ({label}) a {baud} baud...", end=" ", flush=True)
+        try:
+            ser = open_arduino_serial(device, baud=baud, timeout=0.2, verify_stream=True)
+            ser.close()
+            print("OK — Handshake e fluxo EMG confirmados.")
             return device, baud
-        print("sem pacote EMG")
+        except (serial.SerialException, OSError) as exc:
+            print(f"falhou ({exc})")
+
     raise RuntimeError(
-        "Não foi encontrado um fluxo EMG. Confirma alimentação, emparelhamento "
-        "USB e firmware emg_stream_hc05.ino. Se o Uno estiver com o "
-        "firmware de reconhecimento, carrega primeiro o firmware de aquisição."
+        "Não foi encontrado um fluxo EMG válido. Confirma o cabo USB, drivers (CH340/Arduino) "
+        "e se o firmware firmware/emg_stream_hc05/emg_stream_hc05.ino está carregado no Uno."
     )
 
 
@@ -108,28 +91,36 @@ def collect_session(port, baud, seconds, repetitions, labels, output):
     print("- Relaxa completamente durante as pausas.")
     print("- Podes interromper com Ctrl+C; os dados já escritos são preservados.")
 
+    ser = None
     try:
-        with serial.Serial(port, baudrate=baud, timeout=0.15) as ser, \
-             output.open("a", newline="", encoding="utf-8") as f:
+        ser = open_arduino_serial(port, baud=baud, timeout=0.2, verify_stream=True)
+        with output.open("a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if new_file:
                 writer.writerow(["sequence", "emg1", "emg2", "label",
                                  "repetition", "session"])
                 f.flush()
-            time.sleep(0.5)
-            ser.reset_input_buffer()
             for li, label in enumerate(labels, 1):
                 print(f"\n[{li}/{len(labels)}] Próximo gesto: {label}")
                 print("  " + GESTURES.get(label, "Gesto adicional definido pelo utilizador."))
                 input("Prepara o gesto e prime ENTER quando estiveres pronto...")
                 for rep in range(1, repetitions + 1):
                     input(f"  Repetição {rep}/{repetitions}: prime ENTER para começar...")
-                    ser.reset_input_buffer()
+                    try:
+                        ser.reset_input_buffer()
+                    except (serial.SerialException, OSError):
+                        ser = reconnect_serial(port, baud=baud, timeout=0.2)
+
                     print(f"  A recolher {seconds:g} s...", end="", flush=True)
                     start = time.monotonic()
                     rows = 0
                     while time.monotonic() - start < seconds:
-                        item = parse_sample(ser.readline())
+                        try:
+                            raw = ser.readline()
+                        except (serial.SerialException, OSError):
+                            ser = reconnect_serial(port, baud=baud, timeout=0.2)
+                            continue
+                        item = parse_sample(raw)
                         if item is None:
                             continue
                         seq, a, b = item
@@ -146,6 +137,9 @@ def collect_session(port, baud, seconds, repetitions, labels, output):
         print("\nRecolha interrompida. Os dados existentes foram guardados.")
     except serial.SerialException as exc:
         raise RuntimeError(f"Erro durante a comunicação série: {exc}") from exc
+    finally:
+        if ser is not None and ser.is_open:
+            ser.close()
 
     print(f"\nAmostras adicionadas nesta sessão: {total}")
     print(f"Dataset atualizado: {output}")
@@ -170,7 +164,7 @@ def train_model():
 
 def main():
     ap = argparse.ArgumentParser(description="Recolha e treino automatizados de EMG")
-    ap.add_argument("--port", help="Forçar porta, por exemplo COM7 ou /dev/rfcomm0")
+    ap.add_argument("--port", help="Forçar porta, por exemplo COM7 ou /dev/ttyUSB0")
     ap.add_argument("--baud", type=int, help="Forçar baud rate")
     ap.add_argument("--seconds", type=float, default=5.0,
                     help="Duração de cada repetição (padrão: 5 s)")
