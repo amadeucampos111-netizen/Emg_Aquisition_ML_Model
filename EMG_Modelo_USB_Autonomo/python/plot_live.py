@@ -20,7 +20,7 @@ y1, y2 = deque([0] * n, maxlen=n), deque([0] * n, maxlen=n)
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 l1, = ax1.plot([], [], lw=0.8)
 l2, = ax2.plot([], [], lw=0.8)
-ax1.set_title(f"Grove EMG 1 — A0 ({active_port})"); ax2.set_title("Grove EMG 2 — A1")
+ax1.set_title(f"Grove EMG 1 — A0 ({active_port})"); ax2.set_title("Grove EMG 2 — A2")
 ax2.set_xlabel("Amostras recentes"); ax1.set_ylabel("ADC"); ax2.set_ylabel("ADC")
 ax1.set_ylim(0, 1023); ax2.set_ylim(0, 1023)
 

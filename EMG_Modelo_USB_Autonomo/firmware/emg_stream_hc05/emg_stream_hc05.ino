@@ -1,6 +1,6 @@
 /*
   AQUISICAO sEMG — Arduino Uno R3 + 2 canais Grove EMG
-  Sensor 1 SIG -> A0; Sensor 2 SIG -> A1; VCC/GND conforme o fabricante.
+  Sensor 1 SIG -> A0; Sensor 2 SIG -> A2; VCC/GND conforme o fabricante.
   Envia por USB: sequencia,adc1,adc2\n
   Responde a comandos "PING" com "PONG_EMG_READY" para handshake seguro com Python.
   Taxa de amostragem: 200 amostras/s por par de canais.
@@ -11,7 +11,7 @@
   autonomamente, sem PC.
 */
 const byte EMG1_PIN = A0;
-const byte EMG2_PIN = A1;
+const byte EMG2_PIN = A2;
 const uint16_t SAMPLE_HZ = 200;
 const uint32_t PERIOD_US = 1000000UL / SAMPLE_HZ;
 

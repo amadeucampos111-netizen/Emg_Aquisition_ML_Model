@@ -17,7 +17,7 @@ The project is divided into two phases. The computer is only required to collect
 | Sensor | Arduino Uno |
 |---|---|
 | EMG 1 — SIG | A0 |
-| EMG 2 — SIG | A1 |
+| EMG 2 — SIG | A2 |
 | VCC | Power supply permitted by the exact sensor revision |
 | GND | GND |
 
@@ -42,7 +42,7 @@ pip install -r requirements.txt
 1. Open `firmware/emg_stream_hc05/emg_stream_hc05.ino` in the Arduino IDE.
 2. Select Arduino Uno and the correct COM port.
 3. Upload the sketch.
-4. Connect the sensors to A0 and A1 and open the Serial Monitor at **115200 baud**. You should see lines in the format `sequence,adc1,adc2`. The header line starts with `#` and is ignored by the Python program.
+4. Connect the sensors to A0 and A2 and open the Serial Monitor at **115200 baud**. You should see lines in the format `sequence,adc1,adc2`. The header line starts with `#` and is ignored by the Python program.
 5. Close the Serial Monitor before starting Python (a COM port cannot normally be opened by two programs at the same time).
 
 The firmware collects 200 pairs of samples per second and sends both channels in the same packet. The acquisition sketch does not require the HC-05 module.

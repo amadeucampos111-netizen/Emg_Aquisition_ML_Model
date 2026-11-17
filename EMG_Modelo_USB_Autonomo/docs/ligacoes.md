@@ -3,7 +3,7 @@
 ## Durante a aquisição e treino por USB
 
 - Grove EMG 1 SIG -> A0
-- Grove EMG 2 SIG -> A1
+- Grove EMG 2 SIG -> A2
 - VCC e GND -> alimentação especificada para a revisão dos sensores; GND comum com o Uno.
 - Arduino Uno -> PC por USB. Firmware de aquisição: `firmware/emg_stream_hc05/emg_stream_hc05.ino`.
 - Monitor Série / Python: 115200 baud.
@@ -11,7 +11,7 @@
 
 ## Durante a classificação autónoma
 
-- Mantêm-se os sensores em A0 e A1.
+- Mantêm-se os sensores em A0 e A2.
 - Carrega `firmware/emg_recognition_uno/emg_recognition_uno.ino` depois de gerar `model.h`.
 - Alimenta o Uno por power bank/fonte adequada; o PC pode estar desligado.
 - HC-05 opcional: TXD -> D10; RXD <- D11 através de divisor de tensão; GND comum; VCC conforme o breakout. Serve apenas para transmitir o rótulo previsto.

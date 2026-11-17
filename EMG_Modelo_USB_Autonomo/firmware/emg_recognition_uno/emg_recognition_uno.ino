@@ -1,7 +1,7 @@
 /*
   Reconhecimento autónomo de gestos - Arduino Uno R3 + 2 Grove EMG + HC-05.
   O modelo linear é exportado para model.h pelo script Python train_export.py.
-  Grove 1 SIG -> A0; Grove 2 SIG -> A1.
+  Grove 1 SIG -> A0; Grove 2 SIG -> A2.
   HC-05 TXD -> D10; HC-05 RXD <- D11 através de divisor de tensão.
   O Arduino calcula características e classifica localmente. O HC-05 apenas
   transmite o resultado (não é necessário PC para o reconhecimento).
@@ -13,7 +13,7 @@
 #include "model.h"
 
 const byte EMG1_PIN = A0;
-const byte EMG2_PIN = A1;
+const byte EMG2_PIN = A2;
 const byte BT_RX_PIN = 10;
 const byte BT_TX_PIN = 11;
 const uint16_t SAMPLE_HZ = 200;
